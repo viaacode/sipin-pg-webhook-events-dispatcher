@@ -1,0 +1,26 @@
+[project]
+name = "sipin-pg-webhook-events-dispatcher"
+version = "0.0.1"
+description = "Polls the Postgres webhook events and sends them to Svix"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "viaa-chassis",
+    "psycopg",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "--rootdir=./app/ -v"
+testpaths = ["tests"]

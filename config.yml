@@ -1,0 +1,10 @@
+viaa:
+    logging:
+        level: DEBUG
+app:
+    db:
+        host: !ENV ${DB_HOST}
+        port: !ENV ${DB_PORT}
+        dbname: !ENV ${DB_NAME}
+        username: !ENV ${DB_USERNAME}
+        password: !ENV ${DB_PASSWORD}

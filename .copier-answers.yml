@@ -1,0 +1,10 @@
+# Changes here will be overwritten by Copier
+_commit: 98ee246
+_src_path: https://github.com/viaacode/meemoo-python-service-template
+project_description: Polls the Postgres webhook events and sends them to Svix
+project_name: sipin-pg-webhook-events-dispatcher
+python_version: '3.12'
+uses_db: true
+uses_mediahaven: false
+uses_pulsar: false
+uses_s3: false

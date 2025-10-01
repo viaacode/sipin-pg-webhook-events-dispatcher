@@ -1,0 +1,1 @@
+print(f"New project with name sipin-pg-webhook-events-dispatcher")
