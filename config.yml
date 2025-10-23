@@ -8,3 +8,6 @@ app:
         dbname: !ENV ${DB_NAME}
         username: !ENV ${DB_USERNAME}
         password: !ENV ${DB_PASSWORD}
+    svix:
+        base_url: !ENV ${SVIX_BASE_URL}
+        auth_token: !ENV ${SVIX_AUTH_TOKEN}

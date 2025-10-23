@@ -5,8 +5,9 @@ description = "Polls the Postgres webhook events and sends them to Svix"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "viaa-chassis",
-    "psycopg",
+    "viaa-chassis==0.2.1",
+    "psycopg[pool]>=3.2.10,<4.0.0",
+    "svix==1.76.1"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -16,8 +17,8 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "ruff",
-    "pytest",
-    "pytest-cov",
+    "pytest>=8.4.2,<9.0.0",
+    "pytest-cov>=7.0.0,<8.0.0",
 ]
 
 [tool.pytest.ini_options]
