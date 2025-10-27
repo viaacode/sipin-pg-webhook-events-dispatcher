@@ -11,3 +11,4 @@ app:
     svix:
         base_url: !ENV ${SVIX_BASE_URL}
         auth_token: !ENV ${SVIX_AUTH_TOKEN}
+        bucket_application_map: !ENV ${SVIX_BUCKET_APPLICATION_MAP}

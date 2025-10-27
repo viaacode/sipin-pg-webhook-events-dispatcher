@@ -24,7 +24,8 @@ RETURNING
   w.id,
   w.event_type,
   w.payload,
-  w.attempts;
+  w.attempts,
+  w.s3_bucket;
 """
 
 MAX_ATTEMPTS = 20
@@ -48,6 +49,17 @@ class DbClient:
         """
         cur.execute(FETCH_SQL, (BATCH_LIMIT,))
         return cur.fetchall()
+
+    def mark_skipped(self, cur: Cursor, event_id: int) -> int:
+        cur.execute(
+            """
+            UPDATE webhook_events
+               SET status='skipped'
+             WHERE id=%s
+            """,
+            (event_id,),
+        )
+        return cur.rowcount
 
     def mark_sent(self, cur: Cursor, event_id: int, svix_id: str):
         cur.execute(
