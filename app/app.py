@@ -10,15 +10,11 @@ from viaa.observability import logging
 from svix.exceptions import HttpError, HTTPValidationError
 from .services.db import DbClient
 from .services.svix import SvixClient
+from .helpers.svix_router import SvixRouter
 
-
-config_parser = ConfigParser()
-config = config_parser.app_cfg
-log = logging.get_logger(__name__, config=config_parser)
 
 BACKOFF_CAP_S = 900
 
-APP_ID = "pg-dispatch"
 SLEEP: int = 120
 
 
@@ -38,6 +34,7 @@ class PgEventsPoller:
         self.svix_client = SvixClient(
             self.config["svix"]["auth_token"], self.config["svix"]["base_url"]
         )
+        self.svix_router = SvixRouter(self.config["svix"]["bucket_application_map"])
         self.should_continue = True
 
     def stop(self, *_) -> None:
@@ -68,9 +65,24 @@ class PgEventsPoller:
         row_id: int = int(row["id"])
         attempts: int = int(row["attempts"])
         event_type = row["event_type"]
+        s3_bucket = row["s3_bucket"]
         payload: dict[str, str] = row["payload"]
+
+        # Check mapping to Svix application
+        app_id = self.svix_router.route(s3_bucket)
+        if not app_id:
+            self.db_client.mark_skipped(
+                cur,
+                row_id,
+            )
+            self.log.debug(
+                "Unknown bucket, cannot be routed to an application in Svix",
+                id=row_id,
+            )
+            return
+
         try:
-            response = self.svix_client.post_event(APP_ID, row_id, event_type, payload)
+            response = self.svix_client.post_event(app_id, row_id, event_type, payload)
         except HTTPValidationError as http_val_e:
             # This mean invalid body, no reason to retry
             status_code = http_val_e.status_code
