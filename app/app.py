@@ -145,10 +145,32 @@ class PgEventsPoller:
             id=row_id,
         )
 
-    def start_polling(self) -> None:
-        """The main polling loop.
+    def _poll_once(self) -> bool:
+        """Poll once for webhook events.
 
-        Fetch a fixed amount of records that should be processed.
+        Returns:
+            True when rows were processed, false when no rows were found.
+        """
+        with (
+            self.db_client.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            rows = self.db_client.fetch_batch(cur)
+            if not rows:
+                conn.rollback()  # Clear the open (UPDATE ... RETURNING) transaction
+                return False
+
+            for row in rows:
+                self._handle_webhook_event(cur, row)
+            conn.commit()
+            return True
+
+    def start_polling(self) -> None:
+        """Start the main polling loop.
+
+        Polls Postgres for webhook events to process until shutdown is requested.
+
+        If no records are found, sleeps before starting a new polling iteration.
         """
         # Graceful shutdown signals
         signal.signal(signal.SIGTERM, self.stop)
@@ -158,17 +180,10 @@ class PgEventsPoller:
 
         while self.should_continue:
             try:
-                with self.db_client.pool.connection() as conn:
-                    with conn.cursor(row_factory=dict_row) as cur:
-                        rows = self.db_client.fetch_batch(cur)
-                        if not rows:
-                            conn.rollback()  # Clear the open (UPDATE … RETURNING) transaction
-                        else:
-                            for row in rows:
-                                self._handle_webhook_event(cur, row)
-                            conn.commit()
-                            continue  # Do not sleep if records are found due to LIMIT clause
-                time.sleep(SLEEP)  # Sleep some time
+                processed_rows = self._poll_once()
+                # Do not sleep if records are found due to LIMIT clause
+                if not processed_rows:
+                    time.sleep(SLEEP)
             except Exception as e:
                 self.log.error("Error during executing polling loop", error=repr(e))
                 time.sleep(1)
