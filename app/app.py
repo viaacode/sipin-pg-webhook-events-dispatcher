@@ -3,15 +3,15 @@ import random
 import signal
 import time
 
-from psycopg.rows import dict_row
 from psycopg import Cursor
+from psycopg.rows import dict_row
+from svix.exceptions import HttpError, HTTPValidationError
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
-from svix.exceptions import HttpError, HTTPValidationError
+
+from .helpers.svix_router import SvixRouter
 from .services.db import DbClient
 from .services.svix import SvixClient
-from .helpers.svix_router import SvixRouter
-
 
 BACKOFF_CAP_S = 900
 
@@ -96,7 +96,7 @@ class PgEventsPoller:
                 "Validation error when delivering event",
                 id=row_id,
                 status_code=status_code,
-                error=repr(http_val_e)
+                error=repr(http_val_e),
             )
             return
         except HttpError as http_e:
@@ -124,7 +124,7 @@ class PgEventsPoller:
                 "Error when delivering event",
                 id=row_id,
                 status_code=status_code,
-                error=repr(http_e)
+                error=repr(http_e),
             )
             return
         except Exception as e:
@@ -163,13 +163,12 @@ class PgEventsPoller:
                         rows = self.db_client.fetch_batch(cur)
                         if not rows:
                             conn.rollback()  # Clear the open (UPDATE … RETURNING) transaction
-                            time.sleep(SLEEP)  # Sleep some time
-                            continue
-
-                        for row in rows:
-                            self._handle_webhook_event(cur, row)
-                        conn.commit()
-
+                        else:
+                            for row in rows:
+                                self._handle_webhook_event(cur, row)
+                            conn.commit()
+                            continue  # Do not sleep if records are found due to LIMIT clause
+                time.sleep(SLEEP)  # Sleep some time
             except Exception as e:
                 self.log.error("Error during executing polling loop", error=repr(e))
                 time.sleep(1)
