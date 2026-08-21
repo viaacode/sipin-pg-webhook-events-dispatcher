@@ -3,15 +3,15 @@ import random
 import signal
 import time
 
-from psycopg.rows import dict_row
 from psycopg import Cursor
+from psycopg.rows import dict_row
+from svix.exceptions import HttpError, HTTPValidationError
 from viaa.configuration import ConfigParser
 from viaa.observability import logging
-from svix.exceptions import HttpError, HTTPValidationError
+
+from .helpers.svix_router import SvixRouter
 from .services.db import DbClient
 from .services.svix import SvixClient
-from .helpers.svix_router import SvixRouter
-
 
 BACKOFF_CAP_S = 900
 
@@ -96,7 +96,7 @@ class PgEventsPoller:
                 "Validation error when delivering event",
                 id=row_id,
                 status_code=status_code,
-                error=repr(http_val_e)
+                error=repr(http_val_e),
             )
             return
         except HttpError as http_e:
@@ -124,7 +124,7 @@ class PgEventsPoller:
                 "Error when delivering event",
                 id=row_id,
                 status_code=status_code,
-                error=repr(http_e)
+                error=repr(http_e),
             )
             return
         except Exception as e:
@@ -145,10 +145,32 @@ class PgEventsPoller:
             id=row_id,
         )
 
-    def start_polling(self) -> None:
-        """The main polling loop.
+    def _poll_once(self) -> bool:
+        """Poll once for webhook events.
 
-        Fetch a fixed amount of records that should be processed.
+        Returns:
+            True when rows were processed, false when no rows were found.
+        """
+        with (
+            self.db_client.pool.connection() as conn,
+            conn.cursor(row_factory=dict_row) as cur,
+        ):
+            rows = self.db_client.fetch_batch(cur)
+            if not rows:
+                conn.rollback()  # Clear the open (UPDATE ... RETURNING) transaction
+                return False
+
+            for row in rows:
+                self._handle_webhook_event(cur, row)
+            conn.commit()
+            return True
+
+    def start_polling(self) -> None:
+        """Start the main polling loop.
+
+        Polls Postgres for webhook events to process until shutdown signal
+        is received. When no events are found, pauses execution for the
+        configured poll interval before retrying.
         """
         # Graceful shutdown signals
         signal.signal(signal.SIGTERM, self.stop)
@@ -158,18 +180,10 @@ class PgEventsPoller:
 
         while self.should_continue:
             try:
-                with self.db_client.pool.connection() as conn:
-                    with conn.cursor(row_factory=dict_row) as cur:
-                        rows = self.db_client.fetch_batch(cur)
-                        if not rows:
-                            conn.rollback()  # Clear the open (UPDATE … RETURNING) transaction
-                            time.sleep(SLEEP)  # Sleep some time
-                            continue
-
-                        for row in rows:
-                            self._handle_webhook_event(cur, row)
-                        conn.commit()
-
+                processed_rows = self._poll_once()
+                # Due to LIMIT clause do not sleep if records are found
+                if not processed_rows:
+                    time.sleep(SLEEP)
             except Exception as e:
                 self.log.error("Error during executing polling loop", error=repr(e))
                 time.sleep(1)
