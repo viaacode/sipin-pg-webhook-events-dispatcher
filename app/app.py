@@ -168,9 +168,9 @@ class PgEventsPoller:
     def start_polling(self) -> None:
         """Start the main polling loop.
 
-        Polls Postgres for webhook events to process until shutdown is requested.
-
-        If no records are found, sleeps before starting a new polling iteration.
+        Polls Postgres for webhook events to process until shutdown signal
+        is received. When no events are found, pauses execution for the
+        configured poll interval before retrying.
         """
         # Graceful shutdown signals
         signal.signal(signal.SIGTERM, self.stop)
@@ -181,7 +181,7 @@ class PgEventsPoller:
         while self.should_continue:
             try:
                 processed_rows = self._poll_once()
-                # Do not sleep if records are found due to LIMIT clause
+                # Due to LIMIT clause do not sleep if records are found
                 if not processed_rows:
                     time.sleep(SLEEP)
             except Exception as e:
